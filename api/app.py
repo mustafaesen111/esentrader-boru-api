@@ -144,4 +144,4 @@ def signal_alias():
 if __name__ == "__main__":
     # Port: 80
     # Dışarıdan: http://5.161.110.7:80/alert veya /signal
-    app.run(host="0.0.0.0", port=80, debug=True)
+    app.run(host="0.0.0.0", port=5055, debug=True)
