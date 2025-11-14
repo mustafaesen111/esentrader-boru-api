@@ -9,7 +9,7 @@ app = Flask(__name__)
 # ------- Broker & CopyEngine Tek Boru Nesneleri -------
 
 # IBKR: Şimdilik sadece iskelet, ileride ib_insync ile dolduracağız
-ibkr_broker = IBKRBroker(host="127.0.0.1", port=7497, client_id=1)
+ibkr_broker = IBKRBroker(host="127.0.0.1", port=7496, client_id=1)
 ibkr_broker.connect()  # iskelette sadece connected=True yapıyor
 
 # Binance: Şimdilik API key boş, ileride gerçek key ile dolduracağız
