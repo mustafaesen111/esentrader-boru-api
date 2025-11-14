@@ -1,36 +1,239 @@
-{% extends "base.html" %}
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <title>ESENTRADER — Operasyon Paneli</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-{% block title %}ESENTRADER — Operasyon Paneli{% endblock %}
+    <style>
+        :root {
+            --bg: #050816;
+            --bg-card: #0b1020;
+            --bg-card-soft: #11182a;
+            --accent: #23a3ff;
+            --accent-soft: #1b5fb8;
+            --text: #f5f5f5;
+            --muted: #9ca3af;
+            --danger: #f97373;
+            --success: #4ade80;
+        }
 
-{% block content %}
-    <h1>Operasyon Paneli</h1>
-    <p class="small">
-        Bu sayfa doğrudan VPS’te çalışan Tek Boru API’den veri çekiyor
-        (<code>5.161.110.7:5055</code>).
-    </p>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: radial-gradient(circle at top, #111827 0, #020617 40%);
+            color: var(--text);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                         "Segoe UI", sans-serif;
+            min-height: 100vh;
+        }
+
+        .shell {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 32px 16px 48px;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+        }
+
+        .brand {
+            letter-spacing: 0.2em;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .title {
+            font-size: 32px;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+
+        .pill {
+            font-size: 13px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        .pill span {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: linear-gradient(145deg, #020617, #020617 45%, #030712);
+            border-radius: 18px;
+            border: 1px solid rgba(15, 23, 42, 0.9);
+            box-shadow:
+                0 18px 40px rgba(15, 23, 42, 0.9),
+                0 0 0 1px rgba(15, 23, 42, 0.8);
+            padding: 20px 22px 18px;
+        }
+
+        .tag {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        h1, h2 {
+            font-weight: 700;
+        }
+
+        h2 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .status-line {
+            font-size: 14px;
+            margin-top: 6px;
+        }
+
+        .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .good {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .bad {
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .error-details {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--muted);
+            max-width: 100%;
+            word-break: break-all;
+            white-space: normal;
+        }
+
+        ul {
+            margin-top: 10px;
+            padding-left: 18px;
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        li + li {
+            margin-top: 4px;
+        }
+
+        .small {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 8px;
+        }
+
+        footer {
+            margin-top: 28px;
+            font-size: 11px;
+            color: #6b7280;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <header>
+        <div>
+            <div class="brand">ESENTRADER</div>
+            <div class="title">Operasyon Paneli</div>
+            <p class="small" style="margin-top: 4px;">
+                Bu sayfa doğrudan VPS’te çalışan Tek Boru API’den veri çekiyor
+                (<b>{{ api_base }}</b>).
+            </p>
+        </div>
+        <div class="pill">
+            Tek Boru • Multi Adapter • Self-Healing Bot Mimarisi
+        </div>
+    </header>
 
     <div class="grid">
+        <!-- API HEALTH KARTI -->
         <div class="card">
             <div class="tag">Durum</div>
             <h2>API Health</h2>
-            {% if api_status == "ok" %}
-                <p><span class="ok">OK</span> — service:
-                    <code>{{ api_raw.service }}</code></p>
-            {% elif api_status == "error" %}
-                <p><span class="bad">HATA</span></p>
-                <p class="small">{{ api_raw.error }}</p>
+
+            <div class="label">GENEL DURUM</div>
+
+            {% if api_health.ok %}
+                <p class="status-line">
+                    <span class="good">ÇALIŞIYOR</span> — Tek Boru API ayakta.
+                </p>
             {% else %}
-                <p><span class="bad">UNKNOWN</span></p>
+                <p class="status-line">
+                    <span class="bad">HATA</span> — API şu an cevap vermiyor.
+                </p>
+                {% if api_health.error %}
+                    <p class="error-details">{{ api_health.error }}</p>
+                {% endif %}
             {% endif %}
         </div>
 
+        <!-- IBKR KARTI -->
         <div class="card">
             <div class="tag">IBKR</div>
             <h2>IBKR Bağlantısı</h2>
-            {% if ibkr_connected %}
-                <p><span class="ok">BAĞLI</span></p>
+
+            <div class="label">BAĞLANTI DURUMU</div>
+
+            {% if ibkr_status.connected %}
+                <p class="status-line">
+                    <span class="good">BAĞLI</span> — IB Gateway başarılı şekilde bağlandı.
+                </p>
             {% else %}
-                <p><span class="bad">BAĞLI DEĞİL</span></p>
+                <p class="status-line">
+                    <span class="bad">BAĞLI DEĞİL</span> — IBKR API şu an bağlı değil.
+                </p>
+                {% if ibkr_status.error %}
+                    <p class="error-details">{{ ibkr_status.error }}</p>
+                {% endif %}
             {% endif %}
         </div>
     </div>
@@ -40,7 +243,7 @@
         <h2>“Tek Boru — Multi Adapter — 8 Refleks — Self Healing Mimari”</h2>
         <ul>
             <li><b>1) Tek Boru API:</b> Tüm emirler buradan geçiyor (router + alert + manual order).
-                Yarın IBKR bağlantısı zaten geldi, sonra Binance, Alpaca vs. eklenecek.</li>
+                IBKR bağlantısı zaten geldi, sırada Binance &amp; Alpaca vb. adapterlar.</li>
             <li><b>2) Multi-Broker Adapter:</b> Her broker ayrı modül. Bir adapter düşse bile sistem ayakta.</li>
             <li><b>3) Copy Engine:</b> Portföy oranlı dağıtım. Uzun vadede 3.000+ aboneyi kaldıracak kapasite.</li>
             <li><b>4) Queue + Retry:</b> İşlemler kuyruklanır, internet gitse bile yeniden denenir.</li>
@@ -55,7 +258,13 @@
     </div>
 
     <p class="small">
-        Sayfayı manuel yenilediğinde (F5) değerler IBKR API’den tekrar çekilir.
-        İleride burada: hesap özeti, açık pozisyonlar, copy-engine istatistikleri de göreceğiz.
+        Sayfayı manuel yenilediğinde (F5) değerler Tek Boru API’den tekrar çekilir.
+        Sonraki adımda burada: <b>hesap özeti</b>, <b>açık pozisyonlar</b> ve <b>copy-engine istatistikleri</b> olacak.
     </p>
-{% endblock %}
+
+    <footer>
+        2025 &copy; ESENTRADER — Finans Otomasyon Omurgası
+    </footer>
+</div>
+</body>
+</html>
