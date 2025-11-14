@@ -1,121 +1,99 @@
-from ib_insync import IB, Stock
+from ib_insync import IB, Stock, MarketOrder
+from typing import Optional, Dict, Any
 
 
 class IBKRBroker:
-    def __init__(self, host="127.0.0.1", port=7496, client_id=1):
+    """
+    Basit, senkron IBKR adapter'i.
+    - IB Gateway / TWS host:port üzerinde çalışıyorsa bağlanır.
+    - Bağlantı kurulamazsa connected=False kalır; last_error içine hata yazılır.
+    """
+
+    def __init__(self, host: str = "127.0.0.1", port: int = 4001, client_id: int = 1):
         self.host = host
         self.port = port
         self.client_id = client_id
-        self.ib = None
-        self.connected = False
-        self.last_error = None
+        self.ib: Optional[IB] = None
+        self.connected: bool = False
+        self.last_error: Optional[str] = None
 
-    def connect(self):
+    # ---- Dahili yardımcı ----
+    def _ensure_ib(self) -> IB:
+        if self.ib is None:
+            self.ib = IB()
+        return self.ib
+
+    # ---- Bağlantı ----
+    def connect(self) -> Dict[str, Any]:
         """
-        IB Gateway yoksa veya port kapalıysa burada takılmasın diye
-        kısa timeout ile deniyoruz ve hata mesajını saklıyoruz.
-        DİKKAT: Burada status() ÇAĞRILMIYOR, sadece flag'leri güncelliyoruz.
+        Senkron bağlantı. Timeout kısa tutuldu (2 sn).
+        Başarısız olursa exception fırlatmaz, sadece last_error'a yazar.
         """
+        ib = self._ensure_ib()
         try:
-            if self.ib is None:
-                self.ib = IB()
-            if not self.ib.isConnected():
-                self.ib.connect(self.host, self.port, clientId=self.client_id, timeout=2.0)
-            self.connected = True
+            if not ib.isConnected():
+                # Olası yarım bağlantıyı temizle
+                ib.disconnect()
+                ib.connect(self.host, self.port, clientId=self.client_id, timeout=2)
+
+            self.connected = ib.isConnected()
             self.last_error = None
         except Exception as e:
             self.connected = False
             self.last_error = str(e)
+            print(f"[IBKR] Connect error: {e}", flush=True)
 
-    def status(self):
-        """
-        /api/ibkr/status burayı kullanacak.
-        Gerekirse sadece BAĞLANMAMIŞSA bir kez connect() dener.
-        Ama connect() status() çağırmadığı için RECURSION YOK.
-        """
-        if not self.connected and self.ib is None:
-            self.connect()
+        return self.status()
 
+    # ---- Durum ----
+    def status(self) -> Dict[str, Any]:
+        """
+        IBKR bağlantı durumunu döner.
+        """
+        ib = self._ensure_ib()
+        self.connected = ib.isConnected()
         return {
-            "connected": self.connected,
-            "last_error": self.last_error,
+            "ibkr_connected": self.connected,
             "host": self.host,
             "port": self.port,
             "client_id": self.client_id,
+            "last_error": self.last_error,
         }
 
-    def get_account_summary(self):
-        if not self.connected:
-            self.connect()
-        if not self.connected:
-            return {"connected": False, "error": self.last_error}
-
-        try:
-            vals = self.ib.accountSummary()
-            out = {}
-            for v in vals:
-                key = f"{v.tag}::{v.currency}"
-                out[key] = v.value
-            return {"connected": True, "summary": out}
-        except Exception as e:
-            self.last_error = str(e)
-            return {"connected": False, "error": self.last_error}
-
-    def get_positions(self):
-        if not self.connected:
-            self.connect()
-        if not self.connected:
-            return {"connected": False, "positions": [], "error": self.last_error}
-
-        try:
-            positions = self.ib.positions()
-            result = []
-            for acc, contract, position, avgCost in positions:
-                result.append({
-                    "account": acc,
-                    "symbol": contract.symbol,
-                    "position": float(position),
-                    "avg_cost": float(avgCost),
-                })
-            return {"connected": True, "positions": result}
-        except Exception as e:
-            self.last_error = str(e)
-            return {"connected": False, "positions": [], "error": self.last_error}
-
-    def place_order(self, symbol, qty, side):
-        if not self.connected:
-            self.connect()
-        if not self.connected:
+    # ---- Emir gönderme (çok basit iskelet) ----
+    def place_order(self, symbol: str, qty: float, side: str) -> Dict[str, Any]:
+        """
+        Çok basit market order iskeleti.
+        - Bağlı değilse hata döner.
+        - Canlı sistemde risk/limit kontrolleri ayrıca eklenecek.
+        """
+        if not self.connected or self.ib is None or not self.ib.isConnected():
             return {
                 "ok": False,
-                "error": self.last_error or "IB Gateway not connected",
-                "symbol": symbol,
-                "qty": qty,
-                "side": side,
+                "error": "IBKR not connected",
+                "details": self.status(),
             }
 
-        side_up = side.upper()
-        if side_up not in ("BUY", "SELL"):
-            return {"ok": False, "error": f"invalid side: {side}"}
-
+        ib = self.ib
         try:
             contract = Stock(symbol, "SMART", "USD")
-            order = self.ib.marketOrder(side_up, qty)
-            trade = self.ib.placeOrder(contract, order)
-            self.ib.sleep(1.0)
+            ib.qualifyContracts(contract)
+
+            action = side.upper()
+            order = MarketOrder(action, qty)
+
+            trade = ib.placeOrder(contract, order)
             return {
                 "ok": True,
                 "symbol": symbol,
+                "side": action,
                 "qty": qty,
-                "side": side_up,
-                "status": trade.orderStatus.status,
+                "orderId": trade.order.orderId,
             }
         except Exception as e:
             self.last_error = str(e)
+            print(f"[IBKR] place_order error: {e}", flush=True)
             return {
                 "ok": False,
-                "error": self.last_error,
-                "symbol": symbol,
-                "qty": qty,
-                "side": side,
+                "error": str(e),
             }
