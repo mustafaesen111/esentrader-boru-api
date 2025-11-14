@@ -8,9 +8,9 @@ app = Flask(__name__)
 
 # ------- Broker & CopyEngine Tek Boru Nesneleri -------
 
-# IBKR: Şimdilik sadece iskelet, ileride ib_insync ile dolduracağız
-ibkr_broker = IBKRBroker(host="127.0.0.1", port=7496, client_id=1)
-ibkr_broker.connect()  # iskelette sadece connected=True yapıyor
+# IBKR: IB Gateway Docker 4001 portunda çalışıyor
+ibkr_broker = IBKRBroker(host="127.0.0.1", port=4001, client_id=1)
+ibkr_broker.connect()  # ilk açılışta bağlanmayı dener
 
 # Binance: Şimdilik API key boş, ileride gerçek key ile dolduracağız
 binance_broker = BinanceBroker(api_key="", api_secret="")
@@ -57,8 +57,16 @@ def process_tradingview_signal(payload: dict) -> dict:
     usd = payload.get("usd") or payload.get("amount_usd") or payload.get("AMOUNT_USD")
 
     print("[TV SIGNAL RAW]   ", payload, flush=True)
-    print("[TV SIGNAL PARSED]", "symbol=", symbol, "side=", side, "mode=", mode,
-          "qty=", qty, "usd=", usd, "note=", note, flush=True)
+    print(
+        "[TV SIGNAL PARSED]",
+        "symbol=", symbol,
+        "side=", side,
+        "mode=", mode,
+        "qty=", qty,
+        "usd=", usd,
+        "note=", note,
+        flush=True,
+    )
 
     return {
         "symbol": symbol,
@@ -88,7 +96,7 @@ def route_order_to_brokers(order: dict) -> dict:
 
     print("[ROUTER] Gelen emir:", order, flush=True)
 
-    # Şimdilik çok basit: qty varsa qty ile, yoksa None ile geçiyoruz.
+    # Şimdilik çok basit: qty varsa qty ile geçiyoruz.
     # İleride: mode == 'usd' ise fiyat çekip usd → adet dönüşümü yapılacak.
     ibkr_result = ibkr_broker.place_order(symbol=symbol, qty=qty, side=side)
     binance_result = binance_broker.place_order(symbol=symbol, qty=qty, side=side)
@@ -147,9 +155,10 @@ def signal_alias():
 def ibkr_status():
     """
     IBKR bağlantı durumu
+    connect() dönen dict'i direkt JSON olarak döndürüyoruz.
     """
-    connected = ibkr_broker.connect()
-    return jsonify({"ibkr_connected": bool(connected)})
+    status = ibkr_broker.connect()
+    return jsonify(status)
 
 
 @app.route("/api/ibkr/account", methods=["GET"])
@@ -173,5 +182,5 @@ def ibkr_positions():
 
 
 if __name__ == "__main__":
-    # Port: 5055  (80 numaralı porttan buraya yönlendiriliyor)
+    # Lokal test için; VPS'te zaten nohup ile çalıştırıyoruz
     app.run(host="0.0.0.0", port=5055, debug=True)
