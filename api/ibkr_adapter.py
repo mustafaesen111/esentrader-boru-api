@@ -1,5 +1,6 @@
+from typing import Optional, Dict, Any, List
+
 from ib_insync import IB, Stock, MarketOrder
-from typing import Optional, Dict, Any
 
 
 class IBKRBroker:
@@ -60,6 +61,96 @@ class IBKRBroker:
             "last_error": self.last_error,
         }
 
+    # ---- Hesap Özeti ----
+    def account_info(self) -> Dict[str, Any]:
+        """
+        IBKR hesap özetini döner.
+        NetLiquidation, AvailableFunds, BuyingPower, CashBalance gibi alanları toplar.
+        """
+        ib = self._ensure_ib()
+
+        if not ib.isConnected():
+            self.connect()
+
+        if not ib.isConnected():
+            return {
+                "ok": False,
+                "error": "IBKR not connected",
+                "details": self.status(),
+            }
+
+        try:
+            accounts = ib.managedAccounts() or []
+            account = accounts[0] if accounts else ""
+
+            summary = ib.accountSummary(account)
+            summary_map = {item.tag: item.value for item in summary}
+
+            def _to_float(val: Optional[str]) -> float:
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    return 0.0
+
+            data = {
+                "ok": True,
+                "account": account,
+                "currency": summary_map.get("Currency", "USD"),
+                "net_liquidation": _to_float(summary_map.get("NetLiquidation")),
+                "cash": _to_float(
+                    summary_map.get("AvailableFunds")
+                    or summary_map.get("CashBalance")
+                ),
+                "buying_power": _to_float(summary_map.get("BuyingPower")),
+                "raw": summary_map,
+            }
+            return data
+
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"[IBKR] account_info error: {e}", flush=True)
+            return {
+                "ok": False,
+                "error": str(e),
+                "details": self.status(),
+            }
+
+    # ---- Pozisyonlar ----
+    def positions(self) -> List[Dict[str, Any]]:
+        """
+        IBKR açık pozisyon listesini döner.
+        Şimdilik: account, symbol, position, avgCost
+        (ileride marketPrice & unrealizedPnL eklenebilir)
+        """
+        ib = self._ensure_ib()
+
+        if not ib.isConnected():
+            self.connect()
+
+        if not ib.isConnected():
+            # API endpoint'inde boş liste görürüz
+            return []
+
+        try:
+            pos_list = []
+            for p in ib.positions():
+                contract = p.contract
+                symbol = contract.localSymbol or contract.symbol
+
+                pos_list.append({
+                    "account": p.account,
+                    "symbol": symbol,
+                    "position": float(p.position),
+                    "avgCost": float(p.avgCost),
+                })
+
+            return pos_list
+
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"[IBKR] positions error: {e}", flush=True)
+            return []
+
     # ---- Emir gönderme (çok basit iskelet) ----
     def place_order(self, symbol: str, qty: float, side: str) -> Dict[str, Any]:
         """
@@ -67,14 +158,18 @@ class IBKRBroker:
         - Bağlı değilse hata döner.
         - Canlı sistemde risk/limit kontrolleri ayrıca eklenecek.
         """
-        if not self.connected or self.ib is None or not self.ib.isConnected():
+        ib = self._ensure_ib()
+
+        if not ib.isConnected():
+            self.connect()
+
+        if not ib.isConnected():
             return {
                 "ok": False,
                 "error": "IBKR not connected",
                 "details": self.status(),
             }
 
-        ib = self.ib
         try:
             contract = Stock(symbol, "SMART", "USD")
             ib.qualifyContracts(contract)
@@ -96,4 +191,5 @@ class IBKRBroker:
             return {
                 "ok": False,
                 "error": str(e),
+                "details": self.status(),
             }
