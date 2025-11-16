@@ -1,198 +1,102 @@
-from ib_insync import IB, Stock, MarketOrder
-
-from typing import Optional, Dict, Any
-
-
-
+from __future__ import annotations
+from typing import Dict, Any, Optional, List
 
 
 class IBKRBroker:
-
     """
-
-    Basit, senkron IBKR adapter'i.
-
-    - IB Gateway / TWS host:port üzerinde çalışıyorsa bağlanır.
-
-    - Bağlantı kurulamazsa connected=False kalır; last_error içine hata yazılır.
-
+    FAZ A DEMO ADAPTER
+    ------------------
+    - Gerçek IBKR / ib_insync bağlantısı YOK.
+    - connect() çağrıldığında sadece kendini "bağlı" sayar.
+    - account_info / positions / place_order sahte (dummy) veri döner.
+    - Ama API ÇÖKMEZ, her zaman /api/health ve /api/ibkr/status cevap verir.
     """
-
-
 
     def __init__(self, host: str = "127.0.0.1", port: int = 4001, client_id: int = 1):
-
         self.host = host
-
         self.port = port
-
         self.client_id = client_id
-
-        self.ib: Optional[IB] = None
-
         self.connected: bool = False
-
         self.last_error: Optional[str] = None
 
-
-
-    # ---- Dahili yardımcı ----
-
-    def _ensure_ib(self) -> IB:
-
-        if self.ib is None:
-
-            self.ib = IB()
-
-        return self.ib
-
-
-
-    # ---- Bağlantı ----
-
+    # ---- Bağlantı (DEMO) ----
     def connect(self) -> Dict[str, Any]:
-
         """
-
-        Senkron bağlantı. Timeout kısa tutuldu (2 sn).
-
-        Başarısız olursa exception fırlatmaz, sadece last_error'a yazar.
-
+        Gerçek bağlantı yok. Sadece "bağlı" bayrağını True yapar.
         """
-
-        ib = self._ensure_ib()
-
-        try:
-
-            if not ib.isConnected():
-
-                # Olası yarım bağlantıyı temizle
-
-                ib.disconnect()
-
-                ib.connect(self.host, self.port, clientId=self.client_id, timeout=2)
-
-
-
-            self.connected = ib.isConnected()
-
-            self.last_error = None
-
-        except Exception as e:
-
-            self.connected = False
-
-            self.last_error = str(e)
-
-            print(f"[IBKR] Connect error: {e}", flush=True)
-
-
-
+        self.connected = True
+        self.last_error = None
         return self.status()
 
-
-
     # ---- Durum ----
-
     def status(self) -> Dict[str, Any]:
-
-        """
-
-        IBKR bağlantı durumunu döner.
-
-        """
-
-        ib = self._ensure_ib()
-
-        self.connected = ib.isConnected()
-
         return {
-
             "ibkr_connected": self.connected,
-
             "host": self.host,
-
             "port": self.port,
-
             "client_id": self.client_id,
-
             "last_error": self.last_error,
-
         }
 
+    # ---- Hesap Özeti (DEMO) ----
+    def account_info(self) -> Dict[str, Any]:
+        if not self.connected:
+            return {
+                "cash": 0.0,
+                "equity": 0.0,
+                "currency": "USD",
+                "notes": "IBKR not connected (DEMO)",
+                "last_error": self.last_error or "Not connected",
+            }
 
+        # Burayı istersen sonra gerçek IBKR verisiyle dolduracağız.
+        return {
+            "cash": 3200.0,
+            "equity": 5380.0,
+            "currency": "USD",
+            "notes": "DEMO account_info (FAZ A stub)",
+            "last_error": None,
+        }
 
-    # ---- Emir gönderme (çok basit iskelet) ----
+    # ---- Pozisyonlar (DEMO) ----
+    def positions(self) -> List[Dict[str, Any]]:
+        if not self.connected:
+            return []
 
+        # Örnek dummy pozisyonlar
+        return [
+            {
+                "symbol": "GLDM",
+                "qty": 10,
+                "avg_price": 210.5,
+                "market_price": 212.0,
+                "unrealized_pnl": 15.0,
+            },
+            {
+                "symbol": "SMH",
+                "qty": 5,
+                "avg_price": 240.0,
+                "market_price": 238.5,
+                "unrealized_pnl": -7.5,
+            },
+        ]
+
+    # ---- Emir Gönderme (DEMO) ----
     def place_order(self, symbol: str, qty: float, side: str) -> Dict[str, Any]:
-
         """
-
-        Çok basit market order iskeleti.
-
-        - Bağlı değilse hata döner.
-
-        - Canlı sistemde risk/limit kontrolleri ayrıca eklenecek.
-
+        Gerçek emir YOK. Sadece log/response döner.
         """
-
-        if not self.connected or self.ib is None or not self.ib.isConnected():
-
+        if not self.connected:
             return {
-
                 "ok": False,
-
-                "error": "IBKR not connected",
-
+                "error": "IBKR not connected (DEMO)",
                 "details": self.status(),
-
             }
 
-
-
-        ib = self.ib
-
-        try:
-
-            contract = Stock(symbol, "SMART", "USD")
-
-            ib.qualifyContracts(contract)
-
-
-
-            action = side.upper()
-
-            order = MarketOrder(action, qty)
-
-
-
-            trade = ib.placeOrder(contract, order)
-
-            return {
-
-                "ok": True,
-
-                "symbol": symbol,
-
-                "side": action,
-
-                "qty": qty,
-
-                "orderId": trade.order.orderId,
-
-            }
-
-        except Exception as e:
-
-            self.last_error = str(e)
-
-            print(f"[IBKR] place_order error: {e}", flush=True)
-
-            return {
-
-                "ok": False,
-
-                "error": str(e),
-
-            }
-
+        return {
+            "ok": True,
+            "symbol": symbol,
+            "qty": qty,
+            "side": side,
+            "note": "DEMO order – Faz A stub (gerçek IBKR yok).",
+        }
